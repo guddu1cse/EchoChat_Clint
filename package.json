@@ -1,5 +1,6 @@
 {
-  "name": "realtime-chat-clint",
+  "homepage": "https://guddu1cse.github.io/EchoChat_Clint",
+  "name": "echochat-clint",
   "private": true,
   "version": "0.0.0",
   "type": "module",
@@ -12,7 +13,10 @@
   },
   "dependencies": {
     "axios": "^1.9.0",
+    "EchoChat_Clint": "file:",
+    "echochat-clint": "file:",
     "gh-pages": "^6.3.0",
+    "myportfolio": "file:",
     "react": "^19.0.0",
     "react-dom": "^19.0.0",
     "react-icons": "^5.5.0",
