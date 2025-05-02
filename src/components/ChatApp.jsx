@@ -1,5 +1,6 @@
 import React, { useEffect, useRef, useState } from 'react';
 import { FaUserAlt, FaPaperPlane } from 'react-icons/fa';
+import logo from '/communication.png';
 
 const ChatApp = () => {
   const [username, setUsername] = useState('');
@@ -124,7 +125,7 @@ const ChatApp = () => {
           <div style={{ display: 'flex', flexDirection: 'column', gap: '10px', alignItems: 'center' , justifyContent: 'center' }}>
             <div style={{ display: 'flex', gap: '20px', marginBottom: '20px' }}>
             <img
-              src="/src/assets/communication.png"
+              src={logo}
               alt="logo"
               style={{ width: '30px', height: '30px' }}
             />
