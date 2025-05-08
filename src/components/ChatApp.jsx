@@ -1,6 +1,13 @@
-import React, { use, useEffect, useRef, useState } from "react";
+import React, { use, useCallback, useEffect, useRef, useState } from "react";
 import { FaUserAlt } from "react-icons/fa";
-import { BsCameraVideoFill } from "react-icons/bs";
+import { BsCameraVideoFill, BsMicFill } from "react-icons/bs";
+import {
+  FaVideo,
+  FaVideoSlash,
+  FaMicrophone,
+  FaMicrophoneSlash,
+} from "react-icons/fa";
+
 import logo from "/communication.png";
 
 const ChatApp = () => {
@@ -20,6 +27,14 @@ const ChatApp = () => {
   const remoteVideoRef = useRef(null);
   const localStreamRef = useRef(null);
   const iceCandidateQueueRef = useRef([]);
+  const [selfMediaControl, setSelfMediaControl] = useState({
+    video: true,
+    audio: true,
+  });
+  const [peerMediaControl, setPeerMediaControl] = useState({
+    video: true,
+    audio: true,
+  });
 
   useEffect(() => {
     if (!joined || !socketRef.current) return;
@@ -78,13 +93,10 @@ const ChatApp = () => {
         if (remoteVideoRef.current) {
           remoteVideoRef.current.srcObject = event.streams[0]; // Assign incoming stream
         }
+        console.log("remote stream", event.streams);
       };
 
-      // Get local media stream
-      const localStream = await navigator.mediaDevices.getUserMedia({
-        video: true,
-        audio: true,
-      });
+      const localStream = await getMediaAccess(); // Get local stream
 
       if (localVideoRef.current) {
         localVideoRef.current.srcObject = localStream; // Display local stream for User A
@@ -192,9 +204,17 @@ const ChatApp = () => {
       setIsCallStarted(false);
       peerConnectionRef.current.close();
       localStreamRef.current.getTracks().forEach((track) => track.stop());
-      remoteStreamRef.current.getTracks().forEach((track) => track.stop());
       localVideoRef.current.srcObject = null;
       remoteVideoRef.current.srcObject = null;
+    });
+
+    socket.on("media_controller", ({ micEnabled, cameraEnabled }) => {
+      setPeerMediaControl({
+        video: cameraEnabled,
+        audio: micEnabled,
+      });
+
+      console.log("media_control changes");
     });
 
     return () => {
@@ -211,6 +231,17 @@ const ChatApp = () => {
       setIsCallStarted(false);
     };
   }, [joined]);
+
+  //handling media controller Change
+  useEffect(() => {
+    if (socketRef?.current && selectedUser?.id) {
+      socketRef.current.emit("media_controller", {
+        to: selectedUser.id,
+        micEnabled: selfMediaControl.audio,
+        cameraEnabled: selfMediaControl.video,
+      });
+    }
+  }, [selfMediaControl.audio, selfMediaControl.video]);
 
   // handle typing
   useEffect(() => {
@@ -237,7 +268,13 @@ const ChatApp = () => {
     if (localVideoRef.current && localStreamRef.current && isCallStarted) {
       localVideoRef.current.srcObject = localStreamRef.current;
     }
-  }, [isCallStarted]);
+  }, [isCallStarted, remoteVideoRef.current]);
+
+  const getMediaAccess = useCallback(async () => {
+    return await navigator.mediaDevices.getUserMedia({
+      ...selfMediaControl,
+    });
+  }, [selfMediaControl.audio, selfMediaControl.video]);
 
   const handleUserSelection = (user) => {
     setSelectedUser(user);
@@ -249,7 +286,7 @@ const ChatApp = () => {
   const handleSetUsername = async () => {
     if (username.trim() && !joined) {
       const { io } = await import("socket.io-client");
-      socketRef.current = io("https://echochat-backend-i6mk.onrender.com");
+      socketRef.current = io("http://localhost:5000");
 
       socketRef.current.emit("set_username", username);
       setJoined(true);
@@ -281,12 +318,12 @@ const ChatApp = () => {
     setChatMessages([]);
   };
 
-  const handleCall = async () => {
+  const handleCall = useCallback(async () => {
     const peerConnection = new RTCPeerConnection();
 
     peerConnectionRef.current = peerConnection;
     peerConnection.onicecandidate = (event) => {
-      if (event.candidate) {
+      if (event.candidate && selectedUser?.id) {
         socketRef.current.emit("ice_candidate", {
           to: selectedUser.id,
           candidate: event.candidate,
@@ -295,10 +332,7 @@ const ChatApp = () => {
     };
 
     // Add local media stream tracks if needed
-    const stream = await navigator.mediaDevices.getUserMedia({
-      video: true,
-      audio: true,
-    });
+    const stream = await getMediaAccess();
     stream
       .getTracks()
       .forEach((track) => peerConnection.addTrack(track, stream));
@@ -311,16 +345,18 @@ const ChatApp = () => {
       });
       await peerConnection.setLocalDescription(offer);
 
-      socketRef.current.emit("incoming_call", {
-        to: selectedUser.id,
-        offer,
-      });
-      console.log("Offer sent to:", selectedUser.id, "offer ", offer);
+      if (selectedUser?.id) {
+        socketRef.current.emit("incoming_call", {
+          to: selectedUser.id,
+          offer,
+        });
+      }
+      console.log("Offer sent to:", selectedUser?.id, "offer ", offer);
       setIsCallStarted(true);
     } catch (error) {
       console.error("Error creating offer:", error);
     }
-  };
+  }, [selectedUser?.id, getMediaAccess]);
 
   const handleCallEnd = () => {
     peerConnectionRef.current.close();
@@ -335,6 +371,67 @@ const ChatApp = () => {
     });
   };
 
+  function MediaController({
+    mediaController,
+    setMediaController,
+    isDisabled,
+  }) {
+    return (
+      <div
+        style={{
+          height: "40px",
+          display: "flex",
+          justifyContent: "center",
+          alignItems: "center",
+          backgroundColor: "rgba(132, 139, 131, 0.5)",
+          border: "1px white solid",
+          width: "80px",
+          gap: "10px",
+          borderRadius: "8px",
+        }}
+      >
+        <button
+          onClick={() => {
+            setMediaController({
+              ...mediaController,
+              video: !mediaController.video,
+            });
+            handleCall();
+          }}
+          disabled={isDisabled}
+          style={{
+            padding: "5px",
+            borderRadius: "8px",
+            border: "none",
+            cursor: "pointer",
+            background: "transparent",
+          }}
+        >
+          {mediaController.video ? <FaVideo /> : <FaVideoSlash />}
+        </button>
+
+        <button
+          onClick={() => {
+            setMediaController({
+              ...mediaController,
+              audio: !mediaController.audio,
+            });
+          }}
+          disabled={isDisabled}
+          style={{
+            padding: "5px",
+            borderRadius: "8px",
+            border: "none",
+            cursor: "pointer",
+            background: "transparent",
+          }}
+        >
+          {mediaController.audio ? <FaMicrophone /> : <FaMicrophoneSlash />}
+        </button>
+      </div>
+    );
+  }
+
   return (
     <div
       style={{
@@ -342,6 +439,7 @@ const ChatApp = () => {
         width: "100vw",
         height: "100vh",
         color: "white",
+        zIndex: "1",
       }}
     >
       {isCallStarted && (
@@ -355,7 +453,7 @@ const ChatApp = () => {
             left: "50%",
             transform: "translate(-50%, -50%)",
             backgroundColor: "rgba(128,128,128,0.5)",
-            zIndex: "1",
+            zIndex: "2",
             borderRadius: "8px",
             justifyContent: "center",
             alignItems: "center",
@@ -364,23 +462,71 @@ const ChatApp = () => {
           <div
             style={{ display: "flex", flexDirection: "column", gap: "10px" }}
           >
-            <div style={{ display: "flex", gap: "10px" }}>
-              <div>
-                <video
-                  ref={localVideoRef}
-                  autoPlay
-                  playsInline
-                  muted
-                  style={{ width: "300px", borderRadius: "8px" }}
+            <div
+              style={{
+                display: "flex",
+                gap: "10px",
+                alignItems: "center",
+                justifyContent: "center",
+              }}
+            >
+              <div
+                style={{
+                  display: "flex",
+                  flexDirection: "column",
+                  gap: "10px",
+                  alignItems: "center",
+                  justifyContent: "center",
+                }}
+              >
+                {selfMediaControl.video ? (
+                  <video
+                    ref={localVideoRef}
+                    autoPlay
+                    playsInline
+                    style={{ width: "300px", borderRadius: "8px" }}
+                  />
+                ) : (
+                  <div
+                    autoPlay
+                    playsInline
+                    style={{ width: "300px", borderRadius: "8px" }}
+                  />
+                )}
+                <MediaController
+                  mediaController={selfMediaControl}
+                  setMediaController={setSelfMediaControl}
+                  isDisabled={false}
                 />
                 <p style={{ fontWeight: "bold", textAlign: "center" }}>You</p>
               </div>
-              <div>
-                <video
-                  ref={remoteVideoRef}
-                  autoPlay
-                  playsInline
-                  style={{ width: "300px", borderRadius: "8px" }}
+              <div
+                style={{
+                  display: "flex",
+                  flexDirection: "column",
+                  gap: "10px",
+                  alignItems: "center",
+                  justifyContent: "center",
+                }}
+              >
+                {peerMediaControl.video ? (
+                  <video
+                    ref={remoteVideoRef}
+                    autoPlay
+                    playsInline
+                    style={{ width: "300px", borderRadius: "8px" }}
+                  />
+                ) : (
+                  <div
+                    autoPlay
+                    playsInline
+                    style={{ width: "300px", borderRadius: "8px" }}
+                  />
+                )}
+                <MediaController
+                  mediaController={peerMediaControl}
+                  setMediaController={setPeerMediaControl}
+                  isDisabled={true}
                 />
                 <p style={{ fontWeight: "bold", textAlign: "center" }}>
                   {selectedUser.username}
