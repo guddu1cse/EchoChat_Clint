@@ -74,7 +74,11 @@ const ChatApp = () => {
       console.log("receive_offer", from, offer);
       setIsCallStarted(true);
       // Create a new RTCPeerConnection
-      const peerConnection = new RTCPeerConnection();
+      const peerConnection = new RTCPeerConnection({
+        iceServers: [
+          { urls: "stun:stun.l.google.com:19302" }, // Free Google STUN server
+        ],
+      });
       peerConnectionRef.current = peerConnection;
       callerIdRef.current = from;
 
