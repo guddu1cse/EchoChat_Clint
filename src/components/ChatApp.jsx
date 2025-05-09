@@ -297,7 +297,7 @@ const ChatApp = () => {
   const handleSetUsername = async () => {
     if (username.trim() && !joined) {
       const { io } = await import("socket.io-client");
-      socketRef.current = io("https://echochat-backend-i6mk.onrender.com");
+      socketRef.current = io("https://echochat-backend-i6mk.onrender.com"); //server url
 
       socketRef.current.emit("set_username", username);
       setJoined(true);
