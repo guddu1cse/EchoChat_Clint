@@ -506,7 +506,7 @@ const ChatApp = () => {
                 <video
                   ref={localVideoRef}
                   hidden={!selfMediaControl.video}
-                  muted={!selfMediaControl.audio}
+                  muted={true}
                   autoPlay
                   playsInline
                   style={{ width: "300px", borderRadius: "8px" }}
