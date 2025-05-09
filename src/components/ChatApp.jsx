@@ -280,11 +280,12 @@ const ChatApp = () => {
     }
   }, [isCallStarted, remoteVideoRef.current]);
 
-  const getMediaAccess = useCallback(async () => {
+  const getMediaAccess = async () => {
     return await navigator.mediaDevices.getUserMedia({
-      ...selfMediaControl,
+      video: true,
+      audio: true,
     });
-  }, [selfMediaControl.audio, selfMediaControl.video]);
+  };
 
   const handleUserSelection = (user) => {
     setSelectedUser(user);
@@ -420,7 +421,6 @@ const ChatApp = () => {
               ...mediaController,
               video: !mediaController.video,
             });
-            handleCallUser();
           }}
           disabled={isDisabled}
           style={{
@@ -503,19 +503,26 @@ const ChatApp = () => {
                   justifyContent: "center",
                 }}
               >
-                {selfMediaControl.video ? (
-                  <video
-                    ref={localVideoRef}
-                    autoPlay
-                    playsInline
-                    style={{ width: "300px", borderRadius: "8px" }}
-                  />
-                ) : (
+                <video
+                  ref={localVideoRef}
+                  hidden={!selfMediaControl.video}
+                  muted={!selfMediaControl.audio}
+                  autoPlay
+                  playsInline
+                  style={{ width: "300px", borderRadius: "8px" }}
+                />
+                {!selfMediaControl.video && (
                   <div
-                    autoPlay
-                    playsInline
-                    style={{ width: "300px", borderRadius: "8px" }}
-                  />
+                    style={{
+                      width: "300px",
+                      borderRadius: "8px",
+                      display: "flex",
+                      justifyContent: "center",
+                      alignItems: "center",
+                    }}
+                  >
+                    <FaVideoSlash size={40} />
+                  </div>
                 )}
                 <MediaController
                   mediaController={selfMediaControl}
@@ -533,19 +540,26 @@ const ChatApp = () => {
                   justifyContent: "center",
                 }}
               >
-                {peerMediaControl.video ? (
-                  <video
-                    ref={remoteVideoRef}
-                    autoPlay
-                    playsInline
-                    style={{ width: "300px", borderRadius: "8px" }}
-                  />
-                ) : (
+                <video
+                  ref={remoteVideoRef}
+                  hidden={!peerMediaControl.video}
+                  muted={!peerMediaControl.audio}
+                  autoPlay
+                  playsInline
+                  style={{ width: "300px", borderRadius: "8px" }}
+                />
+                {!peerMediaControl.video && (
                   <div
-                    autoPlay
-                    playsInline
-                    style={{ width: "300px", borderRadius: "8px" }}
-                  />
+                    style={{
+                      width: "300px",
+                      borderRadius: "8px",
+                      display: "flex",
+                      justifyContent: "center",
+                      alignItems: "center",
+                    }}
+                  >
+                    <FaVideoSlash size={40} />
+                  </div>
                 )}
                 <MediaController
                   mediaController={peerMediaControl}
