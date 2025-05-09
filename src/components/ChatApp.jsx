@@ -95,46 +95,52 @@ const ChatApp = () => {
       // Remote stream
       peerConnection.ontrack = (event) => {
         if (remoteVideoRef.current) {
-          remoteVideoRef.current.srcObject = event.streams[0]; // Assign incoming stream
+          remoteVideoRef.current.srcObject = event.streams[0];
         }
         console.log("remote stream", event.streams);
       };
 
-      const localStream = await getMediaAccess(); // Get local stream
+      try {
+        const localStream = await getMediaAccess(); // Get local stream
+        localStreamRef.current = localStream;
 
-      if (localVideoRef.current) {
-        localVideoRef.current.srcObject = localStream; // Display local stream for User A
-      }
-
-      // Add local media tracks to peer connection
-      localStream.getTracks().forEach((track) => {
-        peerConnection.addTrack(track, localStream);
-      });
-
-      // Set remote description (offer from caller)
-      await peerConnection.setRemoteDescription(
-        new RTCSessionDescription(offer)
-      );
-
-      // Process queued ICE candidates
-      for (const queuedCandidate of iceCandidateQueueRef.current) {
-        try {
-          await peerConnection.addIceCandidate(queuedCandidate);
-        } catch (error) {
-          console.error("Error adding queued ICE candidate", error);
+        if (localVideoRef.current) {
+          localVideoRef.current.srcObject = localStream;
         }
+
+        // Add local media tracks to peer connection
+        localStream.getTracks().forEach((track) => {
+          peerConnection.addTrack(track, localStream);
+        });
+
+        // Set remote description (offer from caller)
+        await peerConnection.setRemoteDescription(
+          new RTCSessionDescription(offer)
+        );
+
+        // Process queued ICE candidates
+        for (const queuedCandidate of iceCandidateQueueRef.current) {
+          try {
+            await peerConnection.addIceCandidate(queuedCandidate);
+          } catch (error) {
+            console.error("Error adding queued ICE candidate", error);
+          }
+        }
+        iceCandidateQueueRef.current = []; // Clear the queue
+
+        // Create and send answer
+        const answer = await peerConnection.createAnswer();
+        await peerConnection.setLocalDescription(answer);
+
+        // Send the answer to the caller (User A)
+        socket.emit("incoming_answer", {
+          to: from,
+          answer,
+        });
+      } catch (error) {
+        console.error("Error in receive_offer handler:", error);
+        setIsCallStarted(false);
       }
-      iceCandidateQueueRef.current = []; // Clear the queue
-
-      // Create and send answer
-      const answer = await peerConnection.createAnswer();
-      await peerConnection.setLocalDescription(answer);
-
-      // Send the answer to the caller (User A)
-      socket.emit("incoming_answer", {
-        to: from,
-        answer,
-      });
     });
 
     // ICE candidate listener (both sides)
@@ -322,45 +328,59 @@ const ChatApp = () => {
     setChatMessages([]);
   };
 
-  const handleCall = useCallback(async () => {
-    const peerConnection = new RTCPeerConnection();
-
-    peerConnectionRef.current = peerConnection;
-    peerConnection.onicecandidate = (event) => {
-      if (event.candidate && selectedUser?.id) {
-        socketRef.current.emit("ice_candidate", {
-          to: selectedUser.id,
-          candidate: event.candidate,
-        });
-      }
-    };
-
-    // Add local media stream tracks if needed
-    const stream = await getMediaAccess();
-    stream
-      .getTracks()
-      .forEach((track) => peerConnection.addTrack(track, stream));
-    localStreamRef.current = stream; // show own video
+  const handleCallUser = async () => {
+    if (!selectedUser) return;
 
     try {
-      const offer = await peerConnection.createOffer({
-        offerToReceiveAudio: true,
-        offerToReceiveVideo: true,
+      setIsCallStarted(true);
+      const peerConnection = new RTCPeerConnection({
+        iceServers: [{ urls: "stun:stun.l.google.com:19302" }],
       });
+      peerConnectionRef.current = peerConnection;
+
+      // Get local media stream
+      const localStream = await getMediaAccess();
+      localStreamRef.current = localStream;
+
+      if (localVideoRef.current) {
+        localVideoRef.current.srcObject = localStream;
+      }
+
+      // Add local media tracks to peer connection
+      localStream.getTracks().forEach((track) => {
+        peerConnection.addTrack(track, localStream);
+      });
+
+      // Handle ICE candidates
+      peerConnection.onicecandidate = (event) => {
+        if (event.candidate) {
+          socketRef.current.emit("ice_candidate", {
+            to: selectedUser.id,
+            candidate: event.candidate,
+          });
+        }
+      };
+
+      // Handle remote stream
+      peerConnection.ontrack = (event) => {
+        if (remoteVideoRef.current) {
+          remoteVideoRef.current.srcObject = event.streams[0];
+        }
+      };
+
+      // Create and send offer
+      const offer = await peerConnection.createOffer();
       await peerConnection.setLocalDescription(offer);
 
-      if (selectedUser?.id) {
-        socketRef.current.emit("incoming_call", {
-          to: selectedUser.id,
-          offer,
-        });
-      }
-      console.log("Offer sent to:", selectedUser?.id, "offer ", offer);
-      setIsCallStarted(true);
+      socketRef.current.emit("incoming_call", {
+        to: selectedUser.id,
+        offer,
+      });
     } catch (error) {
-      console.error("Error creating offer:", error);
+      console.error("Error in handleCallUser:", error);
+      setIsCallStarted(false);
     }
-  }, [selectedUser?.id, getMediaAccess]);
+  };
 
   const handleCallEnd = () => {
     peerConnectionRef.current.close();
@@ -400,7 +420,7 @@ const ChatApp = () => {
               ...mediaController,
               video: !mediaController.video,
             });
-            handleCall();
+            handleCallUser();
           }}
           disabled={isDisabled}
           style={{
@@ -825,7 +845,7 @@ const ChatApp = () => {
                   Send
                 </button>
                 <button
-                  onClick={handleCall}
+                  onClick={handleCallUser}
                   style={{
                     backgroundColor: "green",
                     padding: "10px",
