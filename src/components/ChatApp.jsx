@@ -1,13 +1,17 @@
 import React, { use, useCallback, useEffect, useRef, useState } from "react";
 import { FaUserAlt } from "react-icons/fa";
-import { BsCameraVideoFill, BsMicFill } from "react-icons/bs";
+import {
+  BsCameraVideoFill,
+  BsFullscreen,
+  BsFullscreenExit,
+} from "react-icons/bs";
 import {
   FaVideo,
   FaVideoSlash,
   FaMicrophone,
   FaMicrophoneSlash,
+  FaDesktop,
 } from "react-icons/fa";
-
 import logo from "/communication.png";
 
 const ChatApp = () => {
@@ -20,6 +24,7 @@ const ChatApp = () => {
   const [joined, setJoined] = useState(false);
   const [userIsTyaping, setUserIsTyping] = useState(false);
   const [isCallStarted, setIsCallStarted] = useState(false);
+  const [fullView, setFullView] = useState(false);
   const socketRef = useRef(null);
   const peerConnectionRef = useRef(null);
   const localVideoRef = useRef(null);
@@ -280,11 +285,18 @@ const ChatApp = () => {
     }
   }, [isCallStarted, remoteVideoRef.current]);
 
-  const getMediaAccess = async () => {
-    return await navigator.mediaDevices.getUserMedia({
-      video: true,
-      audio: true,
-    });
+  const getMediaAccess = async (isScreenSharing) => {
+    console.log("isScreenSharing", isScreenSharing);
+    if (isScreenSharing) {
+      return await navigator.mediaDevices.getDisplayMedia({
+        video: true,
+        audio: true,
+      });
+    } else
+      return await navigator.mediaDevices.getUserMedia({
+        video: true,
+        audio: true,
+      });
   };
 
   const handleUserSelection = (user) => {
@@ -329,7 +341,7 @@ const ChatApp = () => {
     setChatMessages([]);
   };
 
-  const handleCallUser = async () => {
+  const handleCallUser = async (isScreenSharing) => {
     if (!selectedUser) return;
 
     try {
@@ -340,7 +352,7 @@ const ChatApp = () => {
       peerConnectionRef.current = peerConnection;
 
       // Get local media stream
-      const localStream = await getMediaAccess();
+      const localStream = await getMediaAccess(isScreenSharing);
       localStreamRef.current = localStream;
 
       if (localVideoRef.current) {
@@ -394,6 +406,12 @@ const ChatApp = () => {
     socketRef.current.emit("call_ended", {
       to: selectedUser.id,
     });
+    const reset = {
+      video: true,
+      audio: true,
+    };
+    setSelfMediaControl({ ...reset });
+    setPeerMediaControl({ ...reset });
   };
 
   function MediaController({
@@ -410,7 +428,7 @@ const ChatApp = () => {
           alignItems: "center",
           backgroundColor: "rgba(132, 139, 131, 0.5)",
           border: "1px white solid",
-          width: "80px",
+          width: "auto",
           gap: "10px",
           borderRadius: "8px",
         }}
@@ -452,6 +470,20 @@ const ChatApp = () => {
         >
           {mediaController.audio ? <FaMicrophone /> : <FaMicrophoneSlash />}
         </button>
+        <button
+          onClick={() => {
+            setFullView(!fullView);
+          }}
+          style={{
+            padding: "5px",
+            borderRadius: "8px",
+            border: "none",
+            cursor: "pointer",
+            background: "transparent",
+          }}
+        >
+          <BsFullscreen />
+        </button>
       </div>
     );
   }
@@ -489,6 +521,7 @@ const ChatApp = () => {
             <div
               style={{
                 display: "flex",
+                flexDirection: "row",
                 gap: "10px",
                 alignItems: "center",
                 justifyContent: "center",
@@ -497,6 +530,7 @@ const ChatApp = () => {
               <div
                 style={{
                   display: "flex",
+                  position: "relative",
                   flexDirection: "column",
                   gap: "10px",
                   alignItems: "center",
@@ -505,11 +539,18 @@ const ChatApp = () => {
               >
                 <video
                   ref={localVideoRef}
-                  hidden={!selfMediaControl.video}
+                  hidden={!selfMediaControl.video || fullView}
                   muted={true}
                   autoPlay
                   playsInline
-                  style={{ width: "300px", borderRadius: "8px" }}
+                  style={{
+                    position: fullView ? "fixed" : "unset",
+                    bottom: fullView ? "10px" : "unset",
+                    right: fullView ? "10px" : "unset",
+                    width: fullView ? "100px" : "300px",
+                    borderRadius: "8px",
+                    zIndex: "2",
+                  }}
                 />
                 {!selfMediaControl.video && (
                   <div
@@ -523,6 +564,26 @@ const ChatApp = () => {
                   >
                     <FaVideoSlash size={40} />
                   </div>
+                )}
+                {/* button for full screen */}
+                {fullView && (
+                  <button
+                    style={{
+                      position: "absolute",
+                      top: "10px",
+                      right: "10px",
+                      cursor: "pointer",
+                    }}
+                    onClick={() => {
+                      setFullView(!fullView);
+                    }}
+                  >
+                    {fullView ? (
+                      <BsFullscreen size={20} />
+                    ) : (
+                      <BsFullscreenExit size={20} />
+                    )}
+                  </button>
                 )}
                 <MediaController
                   mediaController={selfMediaControl}
@@ -546,7 +607,17 @@ const ChatApp = () => {
                   muted={!peerMediaControl.audio}
                   autoPlay
                   playsInline
-                  style={{ width: "300px", borderRadius: "8px" }}
+                  style={{
+                    position: fullView ? "absolute" : "unset",
+                    width: fullView ? "80vw" : "300px",
+                    height: "auto",
+                    borderRadius: "8px",
+                    border: "2px solid green",
+                    zIndex: "1",
+                    left: fullView ? "50%" : "unset",
+                    top: fullView ? "50%" : "unset",
+                    transform: fullView ? "translate(-50%, -50%)" : "unset",
+                  }}
                 />
                 {!peerMediaControl.video && (
                   <div
@@ -570,6 +641,21 @@ const ChatApp = () => {
                   {selectedUser.username}
                 </p>
               </div>
+              {fullView && (
+                <button
+                  style={{
+                    position: "absolute",
+                    top: "10px",
+                    right: "10px",
+                    cursor: "pointer",
+                  }}
+                  onClick={() => {
+                    setFullView(!fullView);
+                  }}
+                >
+                  <BsFullscreenExit size={40} />
+                </button>
+              )}
             </div>
             <div
               style={{
@@ -859,7 +945,9 @@ const ChatApp = () => {
                   Send
                 </button>
                 <button
-                  onClick={handleCallUser}
+                  onClick={() => {
+                    handleCallUser(false);
+                  }}
                   style={{
                     backgroundColor: "green",
                     padding: "10px",
@@ -873,6 +961,24 @@ const ChatApp = () => {
                   }}
                 >
                   <BsCameraVideoFill />
+                </button>
+                <button
+                  onClick={() => {
+                    handleCallUser(true);
+                  }}
+                  style={{
+                    backgroundColor: "green",
+                    padding: "10px",
+                    borderRadius: "5px",
+                    border: "none",
+                    color: "white",
+                    cursor: "pointer",
+                    display: "flex",
+                    alignItems: "center",
+                    justifyContent: "center",
+                  }}
+                >
+                  <FaDesktop />
                 </button>
               </footer>
             )}
